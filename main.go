@@ -19,18 +19,18 @@ func (d disk) FitsOnTopOf(o disk) bool {
 }
 
 func main() {
-	var size int
-	flag.IntVar(&size, "size", 4, "size of the tower")
+	size := flag.Int("size", 4, "size of the tower")
+	drawSolver := flag.Bool("drawsolver", false, "also show solution")
 	flag.Parse()
 
 	h := hanoi{
-		numDisks: size,
+		numDisks: *size,
 	}
 	var solver hanoiSolver
 
 	reset := func() {
 		h.Reset()
-		solver.GenerateMoves(size)
+		solver.GenerateMoves(*size)
 	}
 	reset()
 
@@ -52,16 +52,26 @@ loop:
 			case ev.Ch == 's':
 				solver.Next(&h)
 			case ev.Ch == '1':
-				h.MoveA()
+				if h.MoveA() {
+					solver.Move('A')
+				}
 			case ev.Ch == '2':
-				h.MoveB()
+				if h.MoveB() {
+					solver.Move('B')
+				}
 			case ev.Ch == '3':
-				h.MoveC()
+				if h.MoveC() {
+					solver.Move('C')
+				}
 			}
 		case termbox.EventError:
 			panic(ev.Err)
 		}
-		draw(h)
+		if *drawSolver {
+			draw(h, solver)
+		} else {
+			draw(h, hanoiSolver{})
+		}
 	}
 }
 
@@ -72,7 +82,7 @@ func drawDisk(center, row int, d disk) {
 	}
 }
 
-func draw(h hanoi) {
+func draw(h hanoi, s hanoiSolver) {
 	termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
 	_, height := termbox.Size()
 
@@ -100,6 +110,10 @@ func draw(h hanoi) {
 
 	drawDisk(2*mod, 0, h.hand)
 
+	for i := 0; i < len(s.moves); i++ {
+		termbox.SetCell(i, 2, rune(s.moves[i]), termbox.ColorWhite, termbox.ColorDefault)
+	}
+
 	termbox.Flush()
 }
 
@@ -121,44 +135,47 @@ func (h *hanoi) Reset() {
 	}
 }
 
-func (h *hanoi) MoveA() {
-	h.move(&h.a)
+func (h *hanoi) MoveA() bool {
+	return h.move(&h.a)
 }
 
-func (h *hanoi) MoveB() {
-	h.move(&h.b)
+func (h *hanoi) MoveB() bool {
+	return h.move(&h.b)
 }
 
-func (h *hanoi) MoveC() {
-	h.move(&h.c)
+func (h *hanoi) MoveC() bool {
+	return h.move(&h.c)
 }
 
-func (h *hanoi) move(s *diskStack) {
+func (h *hanoi) move(s *diskStack) bool {
 	if h.hand == 0 {
 		d, ok := s.Pop()
 		if ok {
 			h.hand = d
+			return true
 		}
 	} else {
 		top, ok := s.Peek()
 		if ok && !h.hand.FitsOnTopOf(top) {
-			return
+			return false
 		}
 		s.Push(h.hand)
 		h.hand = 0
+		return true
 	}
+	return false
 }
 
 type hanoiSolver struct {
-	i     int
-	moves []rune
+	moves string
 }
 
 func (s *hanoiSolver) Next(h *hanoi) {
-	if s.i >= len(s.moves) {
+	if len(s.moves) == 0 {
 		return
 	}
-	switch s.moves[s.i] {
+	m := rune(s.moves[0])
+	switch m {
 	case 'A':
 		h.MoveA()
 	case 'B':
@@ -166,21 +183,30 @@ func (s *hanoiSolver) Next(h *hanoi) {
 	case 'C':
 		h.MoveC()
 	}
-	s.i++
+	s.Move(m)
+}
+
+func (s *hanoiSolver) Move(m rune) {
+	if len(s.moves) == 0 {
+		s.moves = string(m)
+		return
+	}
+	if rune(s.moves[0]) == m {
+		s.moves = s.moves[1:]
+	} else {
+		s.moves = string(m) + s.moves
+	}
 }
 
 func (s *hanoiSolver) GenerateMoves(size int) {
-	s.i = 0
 	s.moves = generateMoves(size, 'A', 'B', 'C')
 }
 
-func generateMoves(size int, from, via, to rune) []rune {
+func generateMoves(size int, from, via, to rune) string {
 	if size == 0 {
-		return nil
+		return ""
 	}
-	var moves []rune
-	moves = append(moves, generateMoves(size-1, from, to, via)...)
-	moves = append(moves, from, to)
-	moves = append(moves, generateMoves(size-1, via, from, to)...)
-	return moves
+	return generateMoves(size-1, from, to, via) +
+		string(from) + string(to) +
+		generateMoves(size-1, via, from, to)
 }
