@@ -6,7 +6,17 @@ import (
 	termbox "github.com/nsf/termbox-go"
 )
 
-//go:generate stacker -type int
+//go:generate stacker -type disk
+
+type disk int
+
+func (d disk) Size() int {
+	return int(d)
+}
+
+func (d disk) FitsOnTopOf(o disk) bool {
+	return d < o
+}
 
 func main() {
 	var size int
@@ -55,8 +65,8 @@ loop:
 	}
 }
 
-func drawDisk(center, row, size int) {
-	for i := 0; i < size; i++ {
+func drawDisk(center, row int, d disk) {
+	for i := 0; i < d.Size(); i++ {
 		termbox.SetCell(center+i, row, '=', termbox.ColorWhite, termbox.ColorDefault)
 		termbox.SetCell(center-i, row, '=', termbox.ColorWhite, termbox.ColorDefault)
 	}
@@ -67,11 +77,11 @@ func draw(h hanoi) {
 	_, height := termbox.Size()
 
 	mod := h.numDisks*2 + 1
-	drawRow := func(s intStack, col int) {
+	drawRow := func(s diskStack, col int) {
 		row := height - 2
-		s.Walk(func(v int) {
-			for i := 0; i < v; i++ {
-				drawDisk(col, row, v)
+		s.Walk(func(d disk) {
+			for i := 0; i < d.Size(); i++ {
+				drawDisk(col, row, d)
 			}
 			row--
 		})
@@ -95,19 +105,19 @@ func draw(h hanoi) {
 
 type hanoi struct {
 	numDisks int
-	hand     int
-	a        intStack
-	b        intStack
-	c        intStack
+	hand     disk
+	a        diskStack
+	b        diskStack
+	c        diskStack
 }
 
 func (h *hanoi) Reset() {
 	h.hand = 0
-	h.a = intStack{}
-	h.b = intStack{}
-	h.c = intStack{}
+	h.a = diskStack{}
+	h.b = diskStack{}
+	h.c = diskStack{}
 	for i := h.numDisks; i > 0; i-- {
-		h.a.Push(i)
+		h.a.Push(disk(i))
 	}
 }
 
@@ -123,15 +133,15 @@ func (h *hanoi) MoveC() {
 	h.move(&h.c)
 }
 
-func (h *hanoi) move(s *intStack) {
+func (h *hanoi) move(s *diskStack) {
 	if h.hand == 0 {
-		v, ok := s.Pop()
+		d, ok := s.Pop()
 		if ok {
-			h.hand = v
+			h.hand = d
 		}
 	} else {
 		top, ok := s.Peek()
-		if ok && h.hand > top {
+		if ok && !h.hand.FitsOnTopOf(top) {
 			return
 		}
 		s.Push(h.hand)
